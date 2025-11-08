@@ -3,3 +3,4 @@
 # pip install -r library_reqs.txt
 pandas
 requests
+dotenv
