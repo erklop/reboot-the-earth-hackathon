@@ -92,8 +92,8 @@ def get_firms_data(lat, lon, radius=0.5, days=DAYS_BACK, source="VIIRS_SNPP_NRT"
 # Checks rain in the past hour, everything else near real time
 # ========================
 def get_weather_data(lat, lon):
-    url = f"https://api.openweathermap.org/data/2.5/onecall?lat={lat}&lon={lon}&appid={OPENWEATHER_KEY}&units=metric"
-    
+    url = f"https://api.openweathermap.org/data/3.0/onecall?lat={lat}&lon={lon}&units=metric&appid={OPENWEATHER_KEY}"
+
     try:
         # error in 15 seconsb hrbieaslushh
         r = requests.get(url, timeout=15)
@@ -123,7 +123,7 @@ def get_weather_data(lat, lon):
 # I HATE JSON FILES GIVE ME CSV
 # ========================
 def get_air_quality(lat, lon):
-    url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={OPENWEATHER_KEY}"
+    url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&units=metric&appid={OPENWEATHER_KEY}"
     try:
         r = requests.get(url, timeout=15)
         r.raise_for_status()
