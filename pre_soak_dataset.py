@@ -19,18 +19,19 @@ RADIUS_DEG = 0.5   # Approx. 50 km search box for fires
 # API keys / tokens
 FIRMS_KEY = "7719511bb3848d4b7c2d5a681b104d70"
 OPENWEATHER_KEY = "16909f2013995623a841ba3ee73f48bb"
-OPENET_TOKEN = "YyXnB2Mc5cCEUw37OGYM07VyUsaafUEcVPiZsDzRjwxVk0DimXebBVPbBTLX"  # Bearer token
+OPENET_KEY = "YyXnB2Mc5cCEUw37OGYM07VyUsaafUEcVPiZsDzRjwxVk0DimXebBVPbBTLX"  # Bearer token
 
 # Output file
 OUTPUT_CSV = "pre_soak_dataset.csv"
 
 
 # ========================
-# 1️NASA FIRMS - Fire Data
+# NASA FIRMS - Fire Data
+# This uses VIIRS_SNPP_NRT data specifically
 # ========================
-def get_firms_data(lat, lon, radius=0.5, days="7d"):
+def get_firms_data(lat, lon, radius=0.5, days="7"):
     bbox = f"{lon-radius},{lat-radius},{lon+radius},{lat+radius}"
-    url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/VIIRS_SNPP_NRT?bbox={bbox}&time={days}&api_key={FIRMS_KEY}"
+    url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_KEY}/VIIRS_SNPP_NRT/{bbox}/{days}"
 
     response = requests.get(url)
     if response.status_code != 200:
@@ -73,28 +74,46 @@ def get_weather_data(lat, lon):
 
 # ========================
 # OpenET - Evapotranspiration / Crop Stress
+# Since OpenET API calls fetch a json file, we need to convert it to csv
+# before merging into the final csv dataset.
 # ========================
 def get_openet_data(lat, lon, start_date=None, end_date=None):
-    if not start_date:
+    if end_date is None:
         end_date = datetime.utcnow().date()
+    if start_date is None:
         start_date = end_date - timedelta(days=7)
 
-    url = (
-        f"https://openet-api.openetdata.org/timeseries?"
-        f"lat={lat}&lon={lon}&start_date={start_date}&end_date={end_date}&variable=et"
+    header = {"Authorization": f"Bearer {OPENET_KEY}"}
+    args = {
+        "date_range": [str(start_date), str(end_date)],
+        "interval": "daily",
+        "geometry": [lon, lat],
+        "model": "Ensemble",
+        "variable": "ET",
+        "reference_et": "gridMET",
+        "units": "mm",
+        "file_format": "CSV"
+    }
+
+    resp = requests.post(
+        url="https://openet-api.org/raster/timeseries/point",
+        headers=header,
+        json=args
     )
-    headers = {"Authorization": f"Bearer {OPENET_TOKEN}"}
-    r = requests.get(url, headers=headers)
-    data = r.json().get("data", [])
-    if not data:
+
+    if resp.status_code != 200:
+        print("OpenET request failed:", resp.text)
         return pd.DataFrame()
 
-    df = pd.DataFrame(data)
-    df["et"] = pd.to_numeric(df["et"], errors="coerce")
-    et_cumulative = df["et"].sum()
+    # Save and load CSV directly
+    csv_path = "openet_data.csv"
+    with open(csv_path, "wb") as f:
+        f.write(resp.content)
 
-    return pd.DataFrame([{"ET_cumulative": et_cumulative}])
-
+    df = pd.read_csv(csv_path)
+    df["lat"] = lat
+    df["lon"] = lon
+    return df
 
 # ========================
 # Air Quality (OpenWeather)
