@@ -41,7 +41,9 @@
                 </div>
 
                 <button id="simulateAI" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold transition">Run AI Simulation</button>
-
+                <button id="resetForm" class="mt-2 w-full bg-gray-400 hover:bg-gray-500 text-white py-2 rounded-lg font-semibold transition">
+                    Reset Inputs
+                </button>
                 <!-- AI Recommendation -->
                 <div id="recommendationPanel" class="w-full py-4 mt-6 bg-gray-100 text-gray-800 font-bold text-lg rounded-xl shadow-md border border-gray-300 text-center">
                     <p id="recommendationTitle">AI Recommendation:</p>
@@ -158,6 +160,30 @@
             document.getElementById("smokeIndexValue").textContent = smokeExposureIndex.toFixed(2);
             document.getElementById("yieldImpactValue").textContent = yieldImpact.toFixed(1) + "%";
         }
+        document.getElementById("resetForm").addEventListener("click", resetInputs);
+
+        function resetInputs() {
+            // Reset input values to defaults
+            document.getElementById('input-lat').value = 36.77;
+            document.getElementById('input-lon').value = -119.41;
+            document.getElementById('input-crop').value = "almond";
+            document.getElementById('input-perimeter').value = 50;
+            document.getElementById('input-pump').value = 4250;
+
+            // Reset farm marker on the map
+            farmMarker.setLatLng([36.77, -119.41]).bindPopup("Your Farm").openPopup();
+            map.setView([36.77, -119.41], 8);
+
+            // Reset AI Recommendation panel
+            const recommendationPanel = document.getElementById('recommendationPanel');
+            recommendationPanel.className = "w-full py-4 mt-6 bg-gray-100 text-gray-800 font-bold text-lg rounded-xl shadow-md border border-gray-300 text-center";
+            document.getElementById('recommendationDetails').textContent = "Awaiting input...";
+
+            // Reset Smoke Exposure outputs
+            document.getElementById("aqiValue").textContent = "--";
+            document.getElementById("smokeIndexValue").textContent = "--";
+            document.getElementById("yieldImpactValue").textContent = "--";
+}
     </script>
 </body>
 </html>
