@@ -9,6 +9,21 @@ import pandas as pd
 from datetime import datetime, timedelta
 from io import StringIO
 
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
+
+# API keys / tokens
+# Retrieve API keys from environment
+FIRMS_KEY = os.getenv("FIRMS_KEY")
+OPENWEATHER_KEY = os.getenv("OPENWEATHER_KEY")
+OPENET_KEY = os.getenv("OPENET_KEY")
+
+if not all([FIRMS_KEY, OPENWEATHER_KEY, OPENET_KEY]):
+    raise ValueError("One or more API keys are missing from .env!")
+
 # ========================
 # CONFIGURATION
 # ========================
@@ -16,10 +31,6 @@ LAT = 37.5         # Example: Central California nut orchard
 LON = -120.8
 RADIUS_DEG = 0.5   # Approx. 50 km search box for fires
 
-# API keys / tokens
-FIRMS_KEY = "7719511bb3848d4b7c2d5a681b104d70"
-OPENWEATHER_KEY = "16909f2013995623a841ba3ee73f48bb"
-OPENET_KEY = "YyXnB2Mc5cCEUw37OGYM07VyUsaafUEcVPiZsDzRjwxVk0DimXebBVPbBTLX"  # Bearer token
 
 # Output file
 OUTPUT_CSV = "pre_soak_dataset.csv"

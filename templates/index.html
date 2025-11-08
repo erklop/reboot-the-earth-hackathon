@@ -28,7 +28,6 @@
                 
                 <label class="block text-sm font-medium">Longitude</label>
                 <input type="number" id="input-lon" value="-119.41" step="0.01" class="w-full p-2 border rounded-lg">
-
                 <label class="block text-sm font-medium">Crop</label>
                 <select id="input-crop" class="w-full p-2 border rounded-lg">
                     <option value="almond" selected>Almond</option>
@@ -37,8 +36,8 @@
 
                 <label class="block text-sm font-medium">Perimeter Width (ft)</label>
                 <input type="number" id="input-perimeter" value="50" class="w-full p-2 border rounded-lg">
-                <!-- Pump capacity input -->
-                <label class="block text-sm font-medium">Pump Capacity (L/hr)</label>
+
+                <label class="block text-sm font-medium">Pump capacity (L/hr)</label>
                 <input type="number" id="input-pump" value="4250" class="w-full p-2 border rounded-lg">
             </div>
             <!-- Buttons for running AI simulation and resetting inputs -->
@@ -77,123 +76,137 @@
 </div>
 
 <script>
-    // Default farm location: Central California almond orchard
     const DEFAULT_LAT = 37.6;
     const DEFAULT_LON = -120.9;
     const DEFAULT_PERIMETER = 50; // ft
     const DEFAULT_PUMP = 4250; // L/hr
-
-    // Initialize map centered on default farm
+    const DANGER_RADIUS_KM = 15;
+    
     const map = L.map('map').setView([DEFAULT_LAT, DEFAULT_LON], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    // Farm marker
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+    
     let farmMarker = L.marker([DEFAULT_LAT, DEFAULT_LON]).addTo(map).bindPopup("Your Farm");
-
-    // Store fire markers
+    let dangerCircle = L.circle([DEFAULT_LAT, DEFAULT_LON], { color:'red', fillColor:'#f03', fillOpacity:0.1, radius:DANGER_RADIUS_KM*1000 }).addTo(map);
     let fireMarkers = [];
-
-    // Run AI simulation
+    
+    function addDemoFire() {
+        const mockFire = { lat: DEFAULT_LAT+0.07, lon: DEFAULT_LON+0.07, intensity:"High" };
+        const marker = L.circleMarker([mockFire.lat, mockFire.lon], { color:"red", radius:8 })
+            .addTo(map).bindPopup(`🔥 Fire (${mockFire.intensity})`);
+        fireMarkers.push(marker);
+    }
+    addDemoFire();
+    
+    function distanceKm(lat1, lon1, lat2, lon2) {
+        const latDiff = lat2-lat1;
+        const lonDiff = lon2-lon1;
+        return Math.sqrt((latDiff*111)**2 + (lonDiff*111*Math.cos(lat1*Math.PI/180))**2);
+    }
+    
     async function runAISimulation() {
         const lat = parseFloat(document.getElementById('input-lat').value);
         const lon = parseFloat(document.getElementById('input-lon').value);
-
-        // Move farm marker
+        const perimeter = parseFloat(document.getElementById('input-perimeter').value) || DEFAULT_PERIMETER;
+        const pump = parseFloat(document.getElementById('input-pump').value) || DEFAULT_PUMP;
+    
         farmMarker.setLatLng([lat, lon]).bindPopup("Updated Farm Location").openPopup();
+        dangerCircle.setLatLng([lat, lon]);
         map.setView([lat, lon], 10);
-
+    
         try {
             const response = await fetch(`/api/run_simulation?lat=${lat}&lon=${lon}`);
             const data = await response.json();
-
-            // Extract simulation data
+    
             const aqi = data.air_quality_index || 100;
-            const etDeficit = data.ET !== undefined ? 1 - (data.ET / 10) : 0;
+            const etDeficit = data.ET !== undefined ? 1 - (data.ET/10) : 0;
+            const smokeExposureIndex = Math.min(1, ((300-aqi)/300)*(1-etDeficit/2));
+            const yieldImpact = (1-smokeExposureIndex)*60;
+    
             const fireDistance = data.nearest_fire_km || 20;
-
-            const smokeExposureIndex = Math.min(1, ((300 - aqi) / 300) * (1 - etDeficit / 2));
-            const yieldImpact = (1 - smokeExposureIndex) * 60;
-
-            // Risk scoring
+    
+            // Risk scoring with pump capacity
             let riskScore = 0;
-            if (fireDistance < 5) riskScore += 3;
-            else if (fireDistance < 15) riskScore += 2;
-            if (aqi > 200) riskScore += 3;
-            else if (aqi > 100) riskScore += 2;
-            if (etDeficit > 0.7) riskScore += 2;
-
-            // Recommendation
+            if (fireDistance<5) riskScore+=3;
+            else if(fireDistance<15) riskScore+=2;
+            if(aqi>200) riskScore+=3;
+            else if(aqi>100) riskScore+=2;
+            if(etDeficit>0.7) riskScore+=2;
+    
+            // Recommended pump based on perimeter (~85 L/hr per foot)
+            const recommendedPump = perimeter*85;
+            if(pump<recommendedPump) riskScore+=1;
+    
+            // Recommendation logic
             let recommendation, recClass;
-            if (riskScore >= 7) {
-                recommendation = "CRITICAL RISK – FULL DEFENSE SOAK";
-                recClass = "bg-red-500 text-white border-red-700";
-            } else if (riskScore >= 4) {
-                recommendation = "MODERATE RISK – PERIMETER BOOST";
-                recClass = "bg-yellow-300 text-gray-900 border-yellow-500";
+            if(riskScore>=7) {
+                recommendation="CRITICAL RISK – FULL DEFENSE SOAK";
+                recClass="bg-red-500 text-white border-red-700";
+            } else if(riskScore>=4) {
+                if(pump<recommendedPump){
+                    recommendation="MODERATE RISK – INCREASE PUMP CAPACITY & PERIMETER BOOST";
+                    recClass="bg-yellow-400 text-gray-900 border-yellow-500";
+                } else {
+                    recommendation="MODERATE RISK – PERIMETER BOOST";
+                    recClass="bg-yellow-300 text-gray-900 border-yellow-500";
+                }
             } else {
-                recommendation = "NORMAL OPERATION – STANDARD IRRIGATION";
-                recClass = "bg-green-300 text-gray-900 border-green-500";
+                recommendation="NORMAL OPERATION – STANDARD IRRIGATION";
+                recClass="bg-green-300 text-gray-900 border-green-500";
             }
-
-            // Update UI
-            const recommendationPanel = document.getElementById('recommendationPanel');
-            recommendationPanel.className = `w-full py-4 mt-6 font-bold text-lg rounded-xl shadow-md border text-center ${recClass}`;
-            document.getElementById('recommendationDetails').textContent = recommendation;
-
+    
+            document.getElementById('recommendationPanel').className = `w-full py-4 mt-6 font-bold text-lg rounded-xl shadow-md border text-center ${recClass}`;
+            document.getElementById('recommendationDetails').textContent = `${recommendation} (Recommended Pump: ${recommendedPump.toFixed(0)} L/hr)`;
+    
             document.getElementById("aqiValue").textContent = aqi;
             document.getElementById("smokeIndexValue").textContent = smokeExposureIndex.toFixed(2);
             document.getElementById("yieldImpactValue").textContent = yieldImpact.toFixed(1) + "%";
-
-            // Remove old fire markers
-            fireMarkers.forEach(marker => map.removeLayer(marker));
-            fireMarkers = [];
-
-            if (data.fires && data.fires.length > 0) {
-                data.fires.forEach(fire => {
-                    const color = fire.intensity === "High" ? "red" : "orange";
-                    const marker = L.circleMarker([fire.lat, fire.lon], { color, radius: 8 })
+    
+            fireMarkers.forEach(m=>map.removeLayer(m));
+            fireMarkers=[];
+    
+            if(data.fires && data.fires.length>0){
+                data.fires.forEach(fire=>{
+                    const dist = distanceKm(lat, lon, fire.lat, fire.lon);
+                    const color = dist<=DANGER_RADIUS_KM ? (fire.intensity==="High"?"red":"orange"):"gray";
+                    const marker = L.circleMarker([fire.lat, fire.lon], { color, radius:8 })
                         .addTo(map)
-                        .bindPopup(`🔥 Fire (${fire.intensity})`);
+                        .bindPopup(`🔥 Fire (${fire.intensity}) - ${dist.toFixed(1)} km away`);
                     fireMarkers.push(marker);
                 });
             }
-
-        } catch (err) {
+    
+        } catch(err){
             console.error("Error fetching simulation data:", err);
             alert("Failed to fetch real-time simulation data.");
         }
     }
-
-    // Reset inputs to default orchard
-    function resetInputs() {
-        document.getElementById('input-lat').value = DEFAULT_LAT;
-        document.getElementById('input-lon').value = DEFAULT_LON;
-        document.getElementById('input-crop').value = "almond";
-        document.getElementById('input-perimeter').value = DEFAULT_PERIMETER;
-        document.getElementById('input-pump').value = DEFAULT_PUMP;
-
+    
+    function resetInputs(){
+        document.getElementById('input-lat').value=DEFAULT_LAT;
+        document.getElementById('input-lon').value=DEFAULT_LON;
+        document.getElementById('input-crop').value="almond";
+        document.getElementById('input-perimeter').value=DEFAULT_PERIMETER;
+        document.getElementById('input-pump').value=DEFAULT_PUMP;
+    
         farmMarker.setLatLng([DEFAULT_LAT, DEFAULT_LON]).bindPopup("Your Farm").openPopup();
+        dangerCircle.setLatLng([DEFAULT_LAT, DEFAULT_LON]);
         map.setView([DEFAULT_LAT, DEFAULT_LON], 10);
-
-        const recommendationPanel = document.getElementById('recommendationPanel');
-        recommendationPanel.className = "w-full py-4 mt-6 bg-gray-100 text-gray-800 font-bold text-lg rounded-xl shadow-md border border-gray-300 text-center";
-        document.getElementById('recommendationDetails').textContent = "Awaiting input...";
-
-        document.getElementById("aqiValue").textContent = "--";
-        document.getElementById("smokeIndexValue").textContent = "--";
-        document.getElementById("yieldImpactValue").textContent = "--";
-
-        fireMarkers.forEach(marker => map.removeLayer(marker));
-        fireMarkers = [];
+    
+        document.getElementById('recommendationPanel').className="w-full py-4 mt-6 bg-gray-100 text-gray-800 font-bold text-lg rounded-xl shadow-md border border-gray-300 text-center";
+        document.getElementById('recommendationDetails').textContent="Awaiting input...";
+        document.getElementById("aqiValue").textContent="--";
+        document.getElementById("smokeIndexValue").textContent="--";
+        document.getElementById("yieldImpactValue").textContent="--";
+    
+        fireMarkers.forEach(m=>map.removeLayer(m));
+        fireMarkers=[];
+        addDemoFire();
     }
-
+    
     document.getElementById("simulateAI").addEventListener("click", runAISimulation);
     document.getElementById("resetForm").addEventListener("click", resetInputs);
-
-    // Set default input values on page load
+    
     resetInputs();
-</script>
-</body>
-</html>
+    </script>
+    </body>
+    </html>
