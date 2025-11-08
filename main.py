@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
-from pre_soak_dataset import build_dataset  # your existing CSV builder
+from pre_soak_dataset import build_dataset, get_firms_data  # your data fusion script
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS so frontend can call API
@@ -24,47 +24,71 @@ def convert_numpy_types(obj):
 
 # --- Simulation function ---
 def run_your_simulation(lat=None, lon=None):
-    # Try building dataset
+    # Build dataset for this location
     df = build_dataset(lat, lon)
     
     if df.empty:
-        # Default/fallback values
+        # Fallback values
         data = {
-            "latitude": np.float64(lat if lat else 0.0),
-            "longitude": np.float64(lon if lon else 0.0),
-            "air_quality_index": np.int64(100),
-            "pm2_5": np.float64(0),
-            "pm10": np.float64(0),
-            "ET": np.float64(0),
-            "fire_intensity": np.float64(0),
-            "nearest_fire_km": np.float64(20),
-            "result_array": np.array([np.int64(1), np.int64(2), np.int64(3)]),
-            "summary": {"max_val": np.int64(3), "mean_val": np.float64(2.0)}
+            "latitude": lat or 0.0,
+            "longitude": lon or 0.0,
+            "air_quality_index": 100,
+            "pm2_5": 0,
+            "pm10": 0,
+            "ET": 0,
+            "fire_intensity": 0,
+            "nearest_fire_km": 20,
+            "fires": []
         }
     else:
         row = df.iloc[0]
+        # Fetch individual fires for map
+        fires_df = get_firms_data(lat, lon)
+        fires_list = []
+        if not fires_df.empty:
+            for _, f in fires_df.iterrows():
+                fires_list.append({
+                    "lat": f.get("latitude", lat),
+                    "lon": f.get("longitude", lon),
+                    "intensity": "High" if f.get("fire_intensity", 0) > 50 else "Medium"
+                })
+
         data = {
-            "latitude": np.float64(lat),
-            "longitude": np.float64(lon),
+            "latitude": lat,
+            "longitude": lon,
             "air_quality_index": row.get("air_quality_index", 100),
             "pm2_5": row.get("pm2_5", 0),
             "pm10": row.get("pm10", 0),
             "ET": row.get("ET", 0),
             "fire_intensity": row.get("fire_intensity", 0),
             "nearest_fire_km": row.get("nearest_fire_km", 20),
-            "result_array": np.array([np.int64(1), np.int64(2), np.int64(3)]),
-            "summary": {"max_val": np.int64(3), "mean_val": np.float64(2.0)}
+            "fires": fires_list
         }
-    # Convert all NumPy types to native Python
     return convert_numpy_types(data)
 
-# --- API endpoint ---
+# --- API endpoint for simulation ---
 @app.route('/api/run_simulation', methods=['GET'])
 def api_run_simulation():
     lat = request.args.get('lat', type=float, default=36.77)
     lon = request.args.get('lon', type=float, default=-119.41)
     data = run_your_simulation(lat, lon)
     return jsonify(data)
+
+# --- API endpoint for fire markers only ---
+@app.route('/api/get_fires', methods=['GET'])
+def api_get_fires():
+    lat = request.args.get('lat', type=float, default=36.77)
+    lon = request.args.get('lon', type=float, default=-119.41)
+    df = get_firms_data(lat, lon)
+    fires = []
+    if not df.empty:
+        for _, row in df.iterrows():
+            fires.append({
+                "lat": row.get("latitude", lat),
+                "lon": row.get("longitude", lon),
+                "intensity": "High" if row.get("fire_intensity", 0) > 50 else "Medium"
+            })
+    return jsonify(fires)
 
 # --- Serve frontend ---
 @app.route('/')
