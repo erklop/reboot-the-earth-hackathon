@@ -92,7 +92,7 @@ def get_firms_data(lat, lon, radius=0.5, days=DAYS_BACK, source="VIIRS_SNPP_NRT"
 # Checks rain in the past hour, everything else near real time
 # ========================
 def get_weather_data(lat, lon):
-    url = f"https://api.openweathermap.org/data/3.5/onecall?lat={lat}&lon={lon}&appid={OPENWEATHER_KEY}&units=metric"
+    url = f"https://api.openweathermap.org/data/3.0/onecall?lat={lat}&lon={lon}&appid={OPENWEATHER_KEY}&units=metric"
     
     try:
         # error in 15 seconsb hrbieaslushh
