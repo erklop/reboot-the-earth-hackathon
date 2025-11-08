@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AgriShield AI — Almond Smoke & Fire Risk Command</title>
+    <!-- Name of project is AgriShield.ai the impact is to protect almond yield & quality; reduces economic losses; promotes smarter water stewardship.-->
+    <title>AgriShield.ai — Almond Smoke & Fire Risk Command</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -11,11 +13,11 @@
 <body class="bg-gray-50 text-gray-900 font-sans">
     <div class="max-w-6xl mx-auto p-6 space-y-6">
         <header class="text-center">
-            <h1 class="text-3xl font-bold">🌰 AgriShield AI</h1>
+            <h1 class="text-3xl font-bold">🌰 AgriShield.ai</h1>
             <p class="text-gray-600 mt-2">AI-driven Irrigation & Smoke Exposure Defense System for Almond Orchards</p>
         </header>
 
-        <!-- Input Panel -->
+        <!-- This is where the user (farmer) inputs their farms information including the lat / long -->
         <section class="grid md:grid-cols-2 gap-6">
             <div class="bg-white p-6 rounded-2xl shadow-md space-y-4">
                 <h2 class="text-xl font-semibold text-gray-700">Farm Configuration</h2>
@@ -26,11 +28,9 @@
                     <label class="block text-sm font-medium">Longitude</label>
                     <input type="number" id="input-lon" value="-119.41" step="0.01" class="w-full p-2 border rounded-lg">
 
-                    <label class="block text-sm font-medium">Crop Type</label>
+                    <label class="block text-sm font-medium">Crop</label>
                     <select id="input-crop" class="w-full p-2 border rounded-lg">
                         <option value="almond" selected>Almond</option>
-                        <option value="walnut">Walnut</option>
-                        <option value="grape">Grape</option>
                     </select>
 
                     <label class="block text-sm font-medium">Perimeter Width (ft)</label>
