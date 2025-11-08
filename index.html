@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pre-Soak Perimeter AI Scheduler (Almond Focus)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font -->
+    <style>
+        /* CONSOLIDATED STYLES START */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            min-height: 100vh;
+        }
+        #alert-bar {
+            transition: background-color 0.5s ease, transform 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #orchard-map-container {
+            position: relative;
+            /* Almond orchard image background */
+            background: url('https://placehold.co/800x450/A3E4D7/333333?text=Central+Valley+Almond+Orchard') center center / cover;
+            border: 2px solid #333;
+        }
+        #fire-perimeter {
+            position: absolute;
+            top: 5%;
+            left: 5%;
+            width: 90%;
+            height: 90%;
+            border: 5px dashed transparent;
+            pointer-events: none;
+            transition: all 1s ease-in-out;
+            opacity: 0;
+        }
+        .wind-vector {
+            position: absolute;
+            top: 50%;
+            left: 10%;
+            font-size: 3rem;
+            color: #ef4444; /* Red for fire-danger wind */
+            transform-origin: 50% 50%;
+            opacity: 0;
+            transition: opacity 1s ease-in-out, transform 1s ease-in-out;
+        }
+        .rotated-30 { transform: rotate(30deg); }
+        /* CONSOLIDATED STYLES END */
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- Header and Alert Bar -->
+    <header id="alert-bar" class="p-4 rounded-lg text-white mb-6 transform hover:scale-[1.01] transition-all duration-300 bg-gray-600">
+        <h1 class="text-2xl font-bold" id="status-title">Almond Orchard Status: Initialization Complete</h1>
+        <p class="text-sm font-light" id="status-message">Awaiting real-time data for next irrigation cycle.</p>
+    </header>
+
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Control Panel / AI Inputs (Column 1) -->
+        <section class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">AI Simulation Controls (Almond Focus)</h2>
+            <p class="text-sm text-gray-500 mb-6">Select a scenario to test the 'Pre-Soak' AI logic.</p>
+
+            <div id="controls" class="space-y-4">
+                <button onclick="runScenario('Normal')" class="w-full py-3 px-4 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition duration-150 shadow-md transform hover:scale-105">
+                    1. Normal Day (Standard Irrigation)
+                </button>
+                <button onclick="runScenario('ModerateRisk')" class="w-full py-3 px-4 bg-yellow-500 text-gray-900 font-medium rounded-lg hover:bg-yellow-600 transition duration-150 shadow-md transform hover:scale-105">
+                    2. **PERIMETER BOOST** (Smoke + Warning)
+                </button>
+                <button onclick="runScenario('CriticalRisk')" class="w-full py-3 px-4 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition duration-150 shadow-md transform hover:scale-105">
+                    3. Critical Risk (FULL DEFENSE SOAK)
+                </button>
+            </div>
+
+            <div class="mt-8">
+                <h3 class="text-lg font-medium text-gray-800">Current AI Inputs (Mock)</h3>
+                <ul class="text-sm text-gray-600 mt-2 space-y-1 bg-gray-50 p-3 rounded-lg">
+                    <li id="input-psps-status">PSPS Status: Stable</li>
+                    <li id="input-fire-proximity">Fire Proximity: 100km</li>
+                    <li id="input-aqi">AQI / Smoke Level: 35 (Good)</li>
+                    <li id="input-et-deficit">Water Deficit (ET): 0.85 (Low Stress)</li>
+                </ul>
+            </div>
+            
+            <!-- NEW SECTION: User Input Profile -->
+            <div class="mt-8 pt-4 border-t border-gray-200">
+                <h3 class="text-lg font-medium text-gray-800">Orchard Profile (User Input)</h3>
+                <ul class="text-sm text-gray-600 mt-2 space-y-1 p-3 border border-dashed rounded-lg">
+                    <li>**Location:** Lat: 37.00, Lon: -121.75 (Central Valley)</li>
+                    <li>**Crop Data:** Almonds ($\text{K}_c$=0.7), 8th Leaf Age</li>
+                    <li>**Perimeter Width:** 50 Feet (Defense Zone)</li>
+                    <li>**Pump Capacity:** 4,250 Liters/Hour</li>
+                </ul>
+                <p class="text-xs text-gray-500 mt-2 italic">This initial data links the farm to external APIs (OpenET, PSPS maps).</p>
+            </div>
+        </section>
+
+        <!-- Orchard Map & Visualization (Column 2 & 3) -->
+        <section class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">Orchard Visualization: Pre-Soak Zone</h2>
+
+            <div id="orchard-map-container" class="h-96 rounded-lg mb-4 flex items-center justify-center">
+                <!-- Mock Fire Perimeter Highlight -->
+                <div id="fire-perimeter"></div>
+                
+                <!-- Mock Wind Vector (Rotated 30 degrees, pointing towards the orchard) -->
+                <div id="wind-vector-icon" class="wind-vector rotated-30">🌬️</div>
+
+                <p id="map-text" class="text-2xl text-white font-bold bg-black bg-opacity-40 p-3 rounded-lg shadow-2xl">Central Valley Almond Orchard</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+                <!-- Almond Specific Data: Smoke Risk -->
+                <div class="bg-gray-100 p-3 rounded-lg border-l-4 border-purple-500">
+                    <p class="text-xs text-gray-500">Smoke Yield Risk</p>
+                    <p class="text-xl font-bold text-gray-700" id="stat-smoke-risk">LOW</p>
+                </div>
+                <!-- Almond Specific Data: Water Schedule -->
+                <div class="bg-gray-100 p-3 rounded-lg border-l-4 border-blue-500">
+                    <p class="text-xs text-gray-500">Target Schedule</p>
+                    <p class="text-xl font-bold text-gray-700" id="stat-schedule">RDI Mode</p>
+                </div>
+                <!-- Standard Data: Water Reserve -->
+                <div class="bg-gray-100 p-3 rounded-lg">
+                    <p class="text-xs text-gray-500">Water Reserve Status</p>
+                    <p class="text-xl font-bold text-gray-700" id="stat-water">85%</p>
+                </div>
+                <!-- Standard Data: AI Command -->
+                <div class="bg-gray-100 p-3 rounded-lg">
+                    <p class="text-xs text-gray-500">AI Command</p>
+                    <p class="text-xl font-bold text-gray-700" id="stat-command">STANDBY</p>
+                </div>
+            </div>
+
+            <!-- Recommendation Panel (Replaces the "Execute" Button) -->
+            <div id="recommendation-panel" class="w-full py-4 mt-6 bg-gray-100 text-gray-800 font-bold text-lg rounded-xl shadow-md border border-gray-300">
+                <p class="text-center text-sm font-medium" id="recommendation-title">AI Recommendation Status:</p>
+                <p class="text-center mt-1 text-base" id="recommendation-details">No critical action required. Continue monitoring.</p>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Global UI Elements
+        const alertBar = document.getElementById('alert-bar');
+        const statusTitle = document.getElementById('status-title');
+        const statusMessage = document.getElementById('status-message');
+        const firePerimeter = document.getElementById('fire-perimeter');
+        const windIcon = document.getElementById('wind-vector-icon');
+        const mapText = document.getElementById('map-text');
+        const statCommand = document.getElementById('stat-command');
+        const statWater = document.getElementById('stat-water');
+        const statSmokeRisk = document.getElementById('stat-smoke-risk');
+        const statSchedule = document.getElementById('stat-schedule');
+        const recommendationPanel = document.getElementById('recommendation-panel');
+        const recommendationTitle = document.getElementById('recommendation-title');
+        const recommendationDetails = document.getElementById('recommendation-details');
+
+        // Mock Data Storage for Demo
+        let mockInputs = {};
+        
+        /**
+         * Runs the AI logic based on the selected scenario.
+         * @param {string} scenario - 'Normal', 'ModerateRisk', or 'CriticalRisk'.
+         */
+        function runScenario(scenario) {
+            // 1. Reset UI
+            // Reset alertBar classes, keeping only necessary base classes
+            alertBar.className = 'p-4 rounded-lg text-white mb-6 transform hover:scale-[1.01] transition-all duration-300';
+            alertBar.classList.add('bg-gray-600'); // Set default color
+
+            firePerimeter.style.opacity = 0;
+            windIcon.style.opacity = 0;
+            mapText.textContent = "Central Valley Almond Orchard";
+            recommendationPanel.className = 'w-full py-4 mt-6 bg-gray-100 text-gray-800 font-bold text-lg rounded-xl shadow-md border border-gray-300';
+
+
+            // 2. Define Scenario Inputs
+            if (scenario === 'Normal') {
+                mockInputs = {
+                    psps_status: "Stable",
+                    fire_proximity_km: 100,
+                    aqi: 35,
+                    et_deficit: 0.85,
+                    water_reserve_percent: 85,
+                    boost_duration_hours: 0,
+                    schedule: "Optimal ET"
+                };
+            } else if (scenario === 'ModerateRisk') {
+                mockInputs = {
+                    psps_status: "Warning",
+                    fire_proximity_km: 12,
+                    aqi: 155, // Unhealthy for Sensitive Groups - High Smoke Risk
+                    et_deficit: 0.70, // Moderate Stress (RDI Mode)
+                    water_reserve_percent: 70,
+                    boost_duration_hours: 2,
+                    schedule: "RDI Override"
+                };
+            } else if (scenario === 'CriticalRisk') {
+                mockInputs = {
+                    psps_status: "Active",
+                    fire_proximity_km: 2,
+                    aqi: 300, // Hazardous Smoke
+                    et_deficit: 0.95, // High Stress (due to pump failure/emergency)
+                    water_reserve_percent: 55,
+                    boost_duration_hours: 4,
+                    schedule: "EMERGENCY"
+                };
+            }
+
+            // 3. Run AI Logic (If/Then Classification)
+            let alertLevel, commandText, alertClass, smokeRiskLevel, smokeColor;
+            let recommendedAction = "No critical action required. Continue monitoring.";
+            let recommendationClass = 'bg-gray-100 text-gray-800 border-gray-300';
+            const estimatedVolume = mockInputs.boost_duration_hours * 4250; // Mock 4250 Liters/hour per perimeter zone
+
+            if (mockInputs.aqi >= 201 || (mockInputs.psps_status === "Active" && mockInputs.fire_proximity_km < 5)) {
+                // CRITICAL RISK LOGIC
+                alertLevel = "CRITICAL: FULL DEFENSE REQUIRED";
+                commandText = "EMERGENCY DUMP";
+                alertClass = 'bg-red-700 shadow-xl border-4 border-red-300';
+                
+                // Critical Action Details
+                recommendedAction = `**IMMEDIATE DEFENSE:** Divert ${estimatedVolume.toLocaleString()} Liters to infrastructure fire lines. **INITIATE BACKUP POWER.** Yield loss risk is 60%.`;
+                recommendedActionClass = 'bg-red-500 text-white border-red-700';
+
+                firePerimeter.style.borderColor = '#fca5a5';
+                firePerimeter.style.opacity = 1;
+                windIcon.style.opacity = 1;
+                windIcon.style.color = '#ef4444';
+                smokeRiskLevel = "HAZARDOUS (60% Yield Loss)";
+                smokeColor = "text-red-600";
+            } else if (mockInputs.psps_status === "Warning" && mockInputs.aqi >= 101) {
+                // PERIMETER BOOST LOGIC (The most valuable scenario)
+                alertLevel = "PERIMETER BOOST ALERT (Preemptive Action)";
+                commandText = "BOOST (Save Yield)";
+                alertClass = 'bg-yellow-500 text-gray-900 shadow-xl border-4 border-yellow-300';
+                
+                // Moderate Action Details (Quantified Instruction)
+                recommendedAction = `**ACT NOW: Initiate Perimeter Soak for ${mockInputs.boost_duration_hours} Hours.** Estimated Water Use: ${estimatedVolume.toLocaleString()} Liters. **PAUSE RDI on inner crop.**`;
+                recommendedActionClass = 'bg-yellow-300 text-gray-900 border-yellow-500';
+
+                firePerimeter.style.borderColor = '#fbbf24';
+                firePerimeter.style.opacity = 1;
+                windIcon.style.opacity = 0.5;
+                smokeRiskLevel = "UNHEALTHY (30% Yield Loss)";
+                smokeColor = "text-yellow-600";
+            } else {
+                // NORMAL/LOW RISK LOGIC
+                alertLevel = "Almond Orchard Status: Optimal ET Mode";
+                commandText = "STANDARD IRRIGATION";
+                alertClass = 'bg-green-600';
+                smokeRiskLevel = "LOW (Good Air Quality)";
+                smokeColor = "text-green-600";
+            }
+            
+            // 4. Update UI with Results
+            // FIX: Use spread operator with classList.remove() and classList.add()
+            const baseAlertClasses = 'p-4 rounded-lg text-white mb-6 transform hover:scale-[1.01] transition-all duration-300';
+            
+            // Re-apply base classes and add new alert class
+            alertBar.className = baseAlertClasses;
+            alertBar.classList.add(...alertClass.split(' '));
+
+            statusTitle.textContent = alertLevel;
+            statusMessage.textContent = `PSPS: ${mockInputs.psps_status} | Fire Proximity: ${mockInputs.fire_proximity_km} km | Smoke AQI: ${mockInputs.aqi}`;
+            
+            // Update Stats Panel
+            statWater.textContent = `${mockInputs.water_reserve_percent}%`;
+            statCommand.textContent = commandText;
+            
+            statSmokeRisk.textContent = smokeRiskLevel;
+            // FIX: Use spread operator for multi-class assignment
+            statSmokeRisk.className = `text-xl font-bold ${smokeColor}`;
+
+            statSchedule.textContent = mockInputs.schedule;
+            
+            // Update Input List
+            document.getElementById('input-psps-status').textContent = `PSPS Status: ${mockInputs.psps_status}`;
+            document.getElementById('input-fire-proximity').textContent = `Fire Proximity: ${mockInputs.fire_proximity_km}km`;
+            document.getElementById('input-aqi').textContent = `AQI / Smoke Level: ${mockInputs.aqi} (${smokeRiskLevel})`;
+            document.getElementById('input-et-deficit').textContent = `Water Deficit (ET): ${mockInputs.et_deficit} (Current Stress)`;
+
+            // Update Recommendation Panel
+            const baseRecClasses = 'w-full py-4 mt-6 font-bold text-lg rounded-xl shadow-md border';
+            recommendationPanel.className = baseRecClasses;
+            recommendationPanel.classList.add(...recommendationClass.split(' '));
+
+            recommendationTitle.textContent = "AI Recommendation:";
+            recommendationDetails.innerHTML = recommendedAction;
+        }
+
+        // Fix: Use DOMContentLoaded to ensure elements exist before calling runScenario
+        document.addEventListener('DOMContentLoaded', () => {
+            runScenario('Normal');
+        });
+    </script>
+</body>
+</html>
