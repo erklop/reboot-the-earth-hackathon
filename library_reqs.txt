@@ -1,0 +1,6 @@
+# You need to install these libraries before running pre_soak_dataset.py
+#
+# pip install -r library_reqs.txt
+pandas
+requests
+dotenv

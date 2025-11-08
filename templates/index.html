@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgriShield.ai — Almond Smoke & Fire Risk Command</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+<div class="max-w-6xl mx-auto p-6 space-y-6">
+    <header class="text-center">
+        <h1 class="text-3xl font-bold">🌰 AgriShield.ai</h1>
+        <p class="text-gray-600 mt-2">AI-driven Irrigation & Smoke Exposure Defense System for Almond Orchards</p>
+    </header>
+
+    <section class="grid md:grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-2xl shadow-md space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">Farm Configuration</h2>
+            <div class="space-y-2">
+                <label class="block text-sm font-medium">Latitude</label>
+                <input type="number" id="input-lat" value="36.77" step="0.01" class="w-full p-2 border rounded-lg">
+                
+                <label class="block text-sm font-medium">Longitude</label>
+                <input type="number" id="input-lon" value="-119.41" step="0.01" class="w-full p-2 border rounded-lg">
+
+                <label class="block text-sm font-medium">Crop</label>
+                <select id="input-crop" class="w-full p-2 border rounded-lg">
+                    <option value="almond" selected>Almond</option>
+                </select>
+
+                <label class="block text-sm font-medium">Perimeter Width (ft)</label>
+                <input type="number" id="input-perimeter" value="50" class="w-full p-2 border rounded-lg">
+
+                <label class="block text-sm font-medium">Pump Capacity (L/hr)</label>
+                <input type="number" id="input-pump" value="4250" class="w-full p-2 border rounded-lg">
+            </div>
+
+            <button id="simulateAI" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold transition">Run AI Simulation</button>
+            <button id="resetForm" class="mt-2 w-full bg-gray-400 hover:bg-gray-500 text-white py-2 rounded-lg font-semibold transition">Reset Inputs</button>
+
+            <div id="recommendationPanel" class="w-full py-4 mt-6 bg-gray-100 text-gray-800 font-bold text-lg rounded-xl shadow-md border border-gray-300 text-center">
+                <p id="recommendationTitle">AI Recommendation:</p>
+                <p id="recommendationDetails" class="mt-1 text-base font-medium text-gray-700">Awaiting input...</p>
+            </div>
+        </div>
+
+        <div id="map" class="h-[500px] rounded-2xl shadow-md border border-gray-200"></div>
+    </section>
+
+    <section class="bg-white p-6 rounded-2xl shadow-md">
+        <h2 class="text-xl font-semibold text-gray-700 mb-2">🌫️ Smoke Exposure Index</h2>
+        <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex-1 p-4 bg-gray-50 border rounded-lg">
+                <p class="font-medium text-gray-700">Current AQI</p>
+                <p id="aqiValue" class="text-2xl font-bold text-gray-800">--</p>
+            </div>
+            <div class="flex-1 p-4 bg-gray-50 border rounded-lg">
+                <p class="font-medium text-gray-700">Smoke Exposure Index</p>
+                <p id="smokeIndexValue" class="text-2xl font-bold text-gray-800">--</p>
+            </div>
+            <div class="flex-1 p-4 bg-gray-50 border rounded-lg">
+                <p class="font-medium text-gray-700">Estimated Yield Impact</p>
+                <p id="yieldImpactValue" class="text-2xl font-bold text-gray-800">--</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+    const map = L.map('map').setView([36.77, -119.41], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    
+    let farmMarker = L.marker([36.77, -119.41]).addTo(map).bindPopup("Your Farm");
+    
+    // Mock fires (optional, can be replaced with backend data later)
+    const mockFires = [
+        { lat: 36.9, lon: -119.1, intensity: "High" },
+        { lat: 37.1, lon: -119.8, intensity: "Medium" }
+    ];
+    mockFires.forEach(fire => {
+        L.circleMarker([fire.lat, fire.lon], {
+            color: fire.intensity === "High" ? "red" : "orange",
+            radius: 8
+        }).addTo(map).bindPopup(`🔥 Fire (${fire.intensity})`);
+    });
+    
+    document.getElementById("simulateAI").addEventListener("click", runAISimulation);
+    document.getElementById("resetForm").addEventListener("click", resetInputs);
+    
+    async function runAISimulation() {
+        const lat = parseFloat(document.getElementById('input-lat').value);
+        const lon = parseFloat(document.getElementById('input-lon').value);
+    
+        // Move farm marker
+        farmMarker.setLatLng([lat, lon]).bindPopup("Updated Farm Location").openPopup();
+        map.setView([lat, lon], 8);
+    
+        try {
+            const response = await fetch(`/api/run_simulation?lat=${lat}&lon=${lon}`);
+            const csvText = await response.text();
+    
+            // Parse CSV manually
+            const rows = csvText.split("\n").filter(r => r);
+            const headers = rows[0].split(",");
+            const values = rows[1].split(",");
+            let data = {};
+            headers.forEach((h, i) => {
+                const v = parseFloat(values[i]);
+                data[h] = isNaN(v) ? values[i] : v;
+            });
+    
+            // Extract needed values
+            const aqi = data.air_quality_index || 100;
+            const etDeficit = 1 - ((data.ET || 0) / 10);  // normalize ET
+            const fireDistance = data.nearest_fire_km || 20;
+            const pspsActive = false; // optional for future integration
+    
+            // Smoke Exposure Index
+            const smokeExposureIndex = Math.min(1, ((300 - aqi) / 300) * (1 - etDeficit / 2));
+            const yieldImpact = (1 - smokeExposureIndex) * 60;
+    
+            // Risk scoring
+            let riskScore = 0;
+            if (fireDistance < 5) riskScore += 3;
+            else if (fireDistance < 15) riskScore += 2;
+            if (aqi > 200) riskScore += 3;
+            else if (aqi > 100) riskScore += 2;
+            if (etDeficit > 0.7) riskScore += 2;
+            if (pspsActive) riskScore += 2;
+    
+            let recommendation, recClass;
+            if (riskScore >= 7) {
+                recommendation = "CRITICAL RISK – FULL DEFENSE SOAK";
+                recClass = "bg-red-500 text-white border-red-700";
+            } else if (riskScore >= 4) {
+                recommendation = "MODERATE RISK – PERIMETER BOOST";
+                recClass = "bg-yellow-300 text-gray-900 border-yellow-500";
+            } else {
+                recommendation = "NORMAL OPERATION – STANDARD IRRIGATION";
+                recClass = "bg-green-300 text-gray-900 border-green-500";
+            }
+    
+            // Update UI
+            const recommendationPanel = document.getElementById('recommendationPanel');
+            recommendationPanel.className = `w-full py-4 mt-6 font-bold text-lg rounded-xl shadow-md border text-center ${recClass}`;
+            document.getElementById('recommendationDetails').textContent = recommendation;
+    
+            document.getElementById("aqiValue").textContent = aqi;
+            document.getElementById("smokeIndexValue").textContent = smokeExposureIndex.toFixed(2);
+            document.getElementById("yieldImpactValue").textContent = yieldImpact.toFixed(1) + "%";
+    
+        } catch (err) {
+            console.error("Error fetching CSV data:", err);
+            alert("Failed to fetch real-time simulation data.");
+        }
+    }
+    
+    function resetInputs() {
+        document.getElementById('input-lat').value = 36.77;
+        document.getElementById('input-lon').value = -119.41;
+        document.getElementById('input-crop').value = "almond";
+        document.getElementById('input-perimeter').value = 50;
+        document.getElementById('input-pump').value = 4250;
+    
+        farmMarker.setLatLng([36.77, -119.41]).bindPopup("Your Farm").openPopup();
+        map.setView([36.77, -119.41], 8);
+    
+        const recommendationPanel = document.getElementById('recommendationPanel');
+        recommendationPanel.className = "w-full py-4 mt-6 bg-gray-100 text-gray-800 font-bold text-lg rounded-xl shadow-md border border-gray-300 text-center";
+        document.getElementById('recommendationDetails').textContent = "Awaiting input...";
+    
+        document.getElementById("aqiValue").textContent = "--";
+        document.getElementById("smokeIndexValue").textContent = "--";
+        document.getElementById("yieldImpactValue").textContent = "--";
+    }
+    </script>
+</body>
