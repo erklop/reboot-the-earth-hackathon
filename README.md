@@ -1,6 +1,6 @@
 # Reboot the Earth Hackathon Project — AgriShield.ai
 
-**Team:** 4 Sophomores from UCSC: Coby Fong, Erick Lopez, Mimi Tekle, Miya Takahashi
+**Team:** 4 Sophomores from UCSC: Coby Fong, Erick Lopez, Mimi, Miya Takahashi
 
 ---
 
